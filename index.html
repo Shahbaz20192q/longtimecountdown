@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Embeddable Countdown Timer</title>
+    <style>
+      :root {
+        --primary-color: #2196f3;
+        --error-color: #f44336;
+      }
+
+      .bigSec {
+        margin: 0;
+        padding: 1rem;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+
+      .big-timer {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 1rem;
+        padding: 1rem;
+        background: rgba(33, 150, 243, 0.08);
+        border-radius: 12px;
+      }
+
+      .time-unit {
+        text-align: center;
+        padding: 1rem;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .time-value {
+        font-size: 2.5rem;
+        line-height: 1;
+        font-weight: 700;
+        color: var(--primary-color);
+        margin-bottom: 0.5rem;
+      }
+
+      .time-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #666;
+        font-weight: 600;
+      }
+
+      .expired {
+        animation: pulse 1.5s infinite;
+        color: var(--error-color);
+      }
+
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.6;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .time-value {
+          font-size: 2rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bigSec">
+      <div class="big-timer" id="big-timer"></div>
+    </div>
+
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const datetimeParam = params.get("datetime");
+        const timezoneParam = params.get("timezone"); // Optional parameter
+
+        // If no datetime is provided, show a message.
+        if (!datetimeParam) {
+          document.getElementById("big-timer").innerHTML = `
+            <div class="time-unit expired">
+              <div class="time-value">No time set</div>
+            </div>
+          `;
+          return;
+        }
+
+        let targetTimeUTC;
+
+        // Helper function: Returns the timezone offset (in minutes) for a given date in the specified IANA timezone.
+        function getTimezoneOffset(date, timeZone) {
+          const dtf = new Intl.DateTimeFormat("en-US", {
+            timeZone,
+            hour12: false,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+          const parts = dtf.formatToParts(date);
+          const filled = {};
+          for (let part of parts) {
+            if (part.type !== "literal") {
+              filled[part.type] = part.value;
+            }
+          }
+          // Construct a string in the format YYYY-MM-DDTHH:mm:ss (assumed to be in UTC)
+          const formatted = `${filled.year}-${filled.month}-${filled.day}T${filled.hour}:${filled.minute}:${filled.second}`;
+          // Parse as if it were UTC
+          const asUTC = new Date(formatted + "Z");
+          // Return the difference in minutes between the given date and the UTC interpretation
+          return (date.getTime() - asUTC.getTime()) / 60000;
+        }
+
+        // Given a datetime string (in "YYYY-MM-DDTHH:mm:ss" format) and a timezone,
+        // interpret that string as wall time in that timezone and return the corresponding UTC Date.
+        function parseDateTimeInTimeZone(dateTimeStr, timeZone) {
+          const [datePart, timePart] = dateTimeStr.split("T");
+          const [year, month, day] = datePart.split("-").map(Number);
+          const [hour, minute, second] = timePart.split(":").map(Number);
+          // Create a Date as if these numbers represented a UTC time.
+          const utcDate = new Date(
+            Date.UTC(year, month - 1, day, hour, minute, second)
+          );
+          // Determine the offset (in minutes) for the given timezone at that moment.
+          const offset = getTimezoneOffset(utcDate, timeZone);
+          // To convert the wall time into true UTC, add the offset.
+          return new Date(utcDate.getTime() + offset * 60000);
+        }
+
+        // Determine the target UTC time.
+        if (timezoneParam) {
+          // Interpret the datetime string as wall time in the provided timezone.
+          targetTimeUTC = parseDateTimeInTimeZone(datetimeParam, timezoneParam);
+        } else {
+          // Otherwise, assume datetimeParam is already in a standard parseable ISO format.
+          targetTimeUTC = new Date(datetimeParam);
+        }
+
+        // Update the timer display.
+        function updateTimer() {
+          const nowLocal = new Date();
+          const diff = targetTimeUTC - nowLocal;
+          const bigTimer = document.getElementById("big-timer");
+
+          if (diff <= 0) {
+            bigTimer.innerHTML = `
+              <div class="time-unit expired" style="grid-column: 1 / -1">
+                <div class="time-value">TIME EXPIRED</div>
+              </div>
+            `;
+            return;
+          }
+
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor(
+            (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+          );
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+          bigTimer.innerHTML = `
+            ${
+              days > 0
+                ? `
+            <div class="time-unit">
+              <div class="time-value">${days}</div>
+              <div class="time-label">Days</div>
+            </div>`
+                : ""
+            }
+            <div class="time-unit">
+              <div class="time-value">${hours.toString().padStart(2, "0")}</div>
+              <div class="time-label">Hours</div>
+            </div>
+            <div class="time-unit">
+              <div class="time-value">${minutes
+                .toString()
+                .padStart(2, "0")}</div>
+              <div class="time-label">Minutes</div>
+            </div>
+            <div class="time-unit">
+              <div class="time-value">${seconds
+                .toString()
+                .padStart(2, "0")}</div>
+              <div class="time-label">Seconds</div>
+            </div>
+          `;
+        }
+
+        // Initial check and update every second.
+        updateTimer();
+        setInterval(updateTimer, 1000);
+      })();
+    </script>
+  </body>
+</html>
