@@ -151,17 +151,15 @@
         // Update the timer display.
         function updateTimer() {
           const nowLocal = new Date();
-          const diff = targetTimeUTC - nowLocal;
-          const bigTimer = document.getElementById("big-timer");
+          let diff = targetTimeUTC - nowLocal;
 
+          // If the timer has expired, reset it to the same time the next day
           if (diff <= 0) {
-            bigTimer.innerHTML = `
-              <div class="time-unit expired" style="grid-column: 1 / -1">
-                <div class="time-value">TIME EXPIRED</div>
-              </div>
-            `;
-            return;
+            targetTimeUTC.setDate(targetTimeUTC.getDate() + 1);
+            diff = targetTimeUTC - nowLocal;
           }
+
+          const bigTimer = document.getElementById("big-timer");
 
           const days = Math.floor(diff / (1000 * 60 * 60 * 24));
           const hours = Math.floor(
